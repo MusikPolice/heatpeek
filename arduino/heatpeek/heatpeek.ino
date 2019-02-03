@@ -1,65 +1,69 @@
 #include <SPI.h>
 #include <WiFi101.h>
 #include <math.h>
+#include <Wire.h>
+#include <Adafruit_MCP9808.h>
 
-// wifi SSID and password are defined in a separate file that isn't committed to git
-#include "secrets.h" 
-char ssid[] = SECRET_SSID;
-char pass[] = SECRET_PASS;
-
-// the server to report to
-char server[] = "google.ca";
+// all of our configuration options are defined in a separate file that isn't committed to git
+#include "secrets.h"
 
 // the wifi client lets us make HTTP requests
 WiFiClient client;
 
-void setup() {
-  // wait for serial port to connect. Needed for native USB port only
-  Serial.begin(9600);
-  while (!Serial) {
-    ;
-  }
+// the temperature sensor
+Adafruit_MCP9808 tempsensor = Adafruit_MCP9808();
 
-  // for testing
-  connectToWifi();
-  String response = makeHttpRequest("/");
+void setup() {
+  // make sure that the temperature sensor is connected
+  if (!tempsensor.begin(0x18)) {
+    Serial.println("Couldn't find MCP9808! Check you connections and verify that it is configured to use I2C address 0x18!");
+    while (1);
+  }
+  tempsensor.setResolution(3);
+
+  // make sure that we can hit wifi
+  if (!connectToWifi()) {
+    Serial.println("Failed to connect to wifi!");
+    while(1);
+  }
 }
 
 void loop() {
-  // TODO: take temperature measurement
-  // TODO: take action based on temperature
+  // take temperature measurement
+  tempsensor.wake();
+  float tempDegreesCelcius = tempsensor.readTempC();
+  tempsensor.shutdown_wake(1);
 
-  // TODO: send the request to the server
-  //connectToWifi();
-  //makeHttpRequest();
-
-  //Serial.println("Waiting between requests...");
-  delay(2000);
+  // send the temperature to prometheus
+  connectToWifi();
+  sendTemp(tempDegreesCelcius);
+  
+  delay(5000);
 }
 
 /**
- * Attempts to connect to the wifi network named <ssid> using password <pass>
+ * Attempts to connect to the wifi network named <WIFI_SSID> using password <WIFI_PASSWORD>
  * Returns true if successful, false otherwise
  */
 bool connectToWifi() {
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("Already connected to " + String(ssid));
+    Serial.println("Already connected to " + String(WIFI_SSID));
     return true;
   }
 
-  Serial.println("Attempting to connect to " + String(ssid));
+  Serial.println("Attempting to connect to " + String(WIFI_SSID));
   long connectTime = millis();
-  int status = WiFi.begin(ssid, pass);
+  int status = WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   
   if (status == WL_CONNECTED) {
-    Serial.println("Successfully connected to " + String(ssid) + " after " + String(millis() - connectTime) + "ms");
+    Serial.println("Successfully connected to " + String(WIFI_SSID) + " after " + String(millis() - connectTime) + "ms");
     printWifiConnectionInfo();
     return true;
   } else {
     if (status == WL_NO_SHIELD) {
-      Serial.println("Failed to connect to " + String(ssid) + " after " + String(millis() - connectTime) + "ms. Could not find a wifi shield");
+      Serial.println("Failed to connect to " + String(WIFI_SSID) + " after " + String(millis() - connectTime) + "ms. Could not find a wifi shield");
     } else {
-      Serial.println("Failed to connect to " + String(ssid) + " after " + String(millis() - connectTime) + "ms");
+      Serial.println("Failed to connect to " + String(WIFI_SSID) + " after " + String(millis() - connectTime) + "ms");
       Serial.println("Are you sure that the correct SSID and password were provided?");
     }
     return false;
@@ -85,29 +89,39 @@ void printWifiConnectionInfo() {
 }
 
 /**
- * Establishes a connection to <server> on port 80 and sends a GET request to <path>
+ * Establishes a connection to <PUSHGATEWAY_IP> on port 80 and sends a GET request to <path>
  * Waits a maximum of 30s for a response from the server
  * Returns the entire HTTP response string, or empty string if something goes wrong
  */
-String makeHttpRequest(String path) {
-  Serial.println("\nAttempting to connect to " + String(server));
+String sendTemp(float temp) {
   long connectTime = millis();
   long requestTime;
+  
+  int port = atoi(PUSHGATEWAY_PORT);
+  String host = String(PUSHGATEWAY_IP) + ":" + String(port);
+  Serial.println("\nAttempting to connect to " + host);
 
   // send the request - connect(...) will block for up to 20s before timing out if server doesn't respond
-  if (client.connect(server, 80)) {
-    Serial.println("Successfully connected to " + String(server) + " after " + String(millis() - connectTime) + "ms");
-    Serial.println("GET " + path + " HTTP/1.1");
-    client.println("GET " + path + " HTTP/1.1");
-    Serial.println("Host: " + String(server));
-    client.println("Host: " + String(server));
-    Serial.println("Connection: close");
-    client.println("Connection: close");
-    Serial.println();
-    client.println();
+  if (client.connect(PUSHGATEWAY_IP, port)) {
+    Serial.println("Successfully connected to " + host + " after " + String(millis() - connectTime) + "ms");
+
+    // see https://prometheus.io/docs/instrumenting/exposition_formats/
+    String metricName = String(ROOM_NAME) + "_temperature";
+    String requestBody = "#TYPE " + metricName + " gauge\n"
+                       + metricName + " " + String(temp,4) + "\n";
+    
+    String request = "POST /metrics/job/heatpeek HTTP/1.1\n"
+                   + String("Content-Type: text/plain; version=0.0.4\n")
+                   + "Host: " + host + "\n"
+                   + "Content-Length: " + String(requestBody.length()) + "\n"
+                   + "\n"
+                   + requestBody;
+    
+    Serial.println(request);
+    client.println(request);
     requestTime = millis();
   } else {
-    Serial.println("Failed to connect to " + String(server) + " after " + String(millis() - connectTime) + "ms");
+    Serial.println("Failed to connect to " + host + " after " + String(millis() - connectTime) + "ms");
     return "";
   }
 
@@ -123,7 +137,7 @@ String makeHttpRequest(String path) {
     }
 
     if (response.length() > 0) {
-      Serial.println("Got a response from " + String(server) + " after " + String(millis() - requestTime) + "ms:");
+      Serial.println("Got a response from " + String(PUSHGATEWAY_IP) + " after " + String(millis() - requestTime) + "ms:");
       Serial.println(response);
       break;
     } else {

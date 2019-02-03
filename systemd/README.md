@@ -20,8 +20,10 @@ Once the services have been started, the `prometheus` and `pushgateway` docker c
 user@SERVER $ docker ps
 CONTAINER ID        IMAGE                COMMAND                  CREATED             STATUS              PORTS                      NAMES
 32b6b0d0ff37        prom/prometheus      "/bin/prometheus -..."   17 seconds ago      Up 6 seconds        0.0.0.0:9090->9090/tcp     prometheus
-1027a01b1b73        prom/pushgateway     "/bin/pushgateway"       15 minutes ago      Up 4 seconds        127.0.0.1:9091->9091/tcp   pushgateway
+1027a01b1b73        prom/pushgateway     "/bin/pushgateway"       15 minutes ago      Up 4 seconds        0.0.0.0:9091->9091/tcp   pushgateway
 ```
 
 ## Configuring Prometheus
-Prometheus is configured via the `prometheus.yml` file in the `/etc/prometheus` directory. Detailed configuration instructions can be found in the [Prometheus Documentation](https://prometheus.io/docs/prometheus/latest/configuration/configuration/)
+Prometheus is configured via the `prometheus.yml` file in the `/etc/prometheus` directory. Detailed configuration instructions can be found in the [Prometheus Documentation](https://prometheus.io/docs/prometheus/latest/configuration/configuration/).
+
+Note that the provided configuration file needs to be modified to suit your network. The first element of the `scrape_configs[push-gateway].static_configs.targets[0]` array needs to be updated to include the IP address of the Docker host that the Push Gateway service is running on, so that Prometheus is able to scrape metrics from it.
