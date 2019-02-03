@@ -1,0 +1,14 @@
+[Unit]
+Description=Prometheus Metrics and Alerting
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=infinity
+ExecStartPre=-/usr/bin/docker stop prometheus
+ExecStartPre=-/usr/bin/docker rm prometheus
+ExecStartPre=/usr/bin/docker pull prom/prometheus
+ExecStart=/usr/bin/docker run --restart=always --name=prometheus -d -p 127.0.0.1:9090:9090 prom/prometheus
+
+[Install]
+WantedBy=multi-user.target
