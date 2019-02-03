@@ -1,4 +1,4 @@
-# heatpeek
+# Heatpeek
 An arduino-based thermostat that reports the local temperature to Prometheus via a wifi connection
 
 ## Compatibility
@@ -14,3 +14,8 @@ After cloning the repository, create the file in the `arduino/heatpeek` director
 ```
 
 Once `secrets.h` is in place, the `heatpeek.ino` sketch can be opened in the Arduino IDE and uploaded to your board.
+
+## Alternative Solutions
+Some other projects that perform similar tasks and might be of interest to you include:
+* [jckuester/weather-station](https://github.com/jckuester/weather-station)
+* [larsp/co2monitor](https://github.com/larsp/co2monitor)
