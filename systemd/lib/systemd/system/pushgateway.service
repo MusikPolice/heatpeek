@@ -8,7 +8,7 @@ TimeoutStartSec=infinity
 ExecStartPre=-/usr/bin/docker stop pushgateway
 ExecStartPre=-/usr/bin/docker rm pushgateway
 ExecStartPre=/usr/bin/docker pull prom/pushgateway
-ExecStart=/usr/bin/docker run --restart=always --name=pushgateway -d -p 127.0.0.1:9091:9091 prom/pushgateway
+ExecStart=/usr/bin/docker run --restart=always --name=pushgateway -d -p 9091:9091 prom/pushgateway
 
 [Install]
 WantedBy=multi-user.target
